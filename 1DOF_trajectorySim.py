@@ -1,4 +1,6 @@
 # 1 Degree of Freedom (1-DOF) Trajectory Simulation
+# TODO: add option to import and use thrust/mass motor profiles
+# TODO: replace kinemtic equations with numerical integration
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,10 +10,10 @@ import scipy.interpolate
 # environmental constants
 g0     = 9.80665     # acceleration due to gravity [m/s^2]
 gamma  = 1.4         # adiabatic ratio
-R      = 287.05287   # gas constant [N-m/kg-K]
-Bs     = 1.458e-6    # [N-s/m2 K1/2]
+R      = 287.05287   # gas constant [N⋅m/kg⋅K]
+Bs     = 1.458e-6    # dynamic viscocity [N⋅s/m^2]
 S      = 110.4       # Sutherland constant [K]
-G      = 6.67430e-11 # Newtonian constant of gravitation [m^3/kg/s^2]
+G      = 6.67430e-11 # Newtonian constant of gravitation [m^3/kg⋅s^2]
 mEarth = 5.972e24    # mass of the Earth [kg]
 rEarth = 6378137     # radius of the Earth [m]
 
@@ -75,10 +77,9 @@ def getDrag(time,fBoost,fCoast,s,rho,velocity,mach):
     drag = 0.5 * rho * cD * s * velocity**2  # [N]
     return drag
 
-# function to calculate standard atmosphere details
+# function to calculate standard atmosphere properties
 def atmosphericConditions(altitude):
-    # calculate gas properties in earth's atmosphere
-    # setup lookup table
+    # calculate gas properties in Earth's atmosphere
     #                          index    lapse rate   base Temp        base alt             base pressure
     #                          i        Ki (°C/m)    Ti (°K)          Hi (m)               P (Pa)
     atmLayerTable = np.array([[1,       -.0065,      288.15,          0,                   101325],
@@ -91,13 +92,13 @@ def atmosphericConditions(altitude):
                               [8,       0,           186.94590831019, 84852.0458449057,    0.373377173762337]])
 
     # extract layer data from lookup table
-    atmLayerK = atmLayerTable[:, 1]  # layer lapst rate [°K/m]
-    atmLayerT = atmLayerTable[:, 2]	 # layer base temp [°K]
-    atmLayerH = atmLayerTable[:, 3]	 # layer altitude [m]
-    atmLayerP = atmLayerTable[:, 4]  # layer pressure [Pa]
+    atmLayerK = atmLayerTable[:,1] # layer lapst rate [°K/m]
+    atmLayerT = atmLayerTable[:,2] # layer base temp [°K]
+    atmLayerH = atmLayerTable[:,3] # layer altitude [m]
+    atmLayerP = atmLayerTable[:,4] # layer pressure [Pa]
 
     # set upper limit of atmospheric model
-    altitudeMax = 90000  # [m]
+    altitudeMax = 90000 # [m]
 
     # troposphere
     if altitude <= atmLayerH[1]:
@@ -179,41 +180,43 @@ while pos[-1] < 20000 and pos[-1] > -.1:
     # calculate current system parameters
     m               = getMass(time[-1],massInert,massProp)
     T, P, rho, a, u = atmosphericConditions(pos[-1])
-   
-    # calculate acceleration using Newton's second law
+    
+    # get rocket body forces
     thrust = getThrust(time[-1],engineThrust)
     drag   = getDrag(time[-1],fBoost,fCoast,A,rho,vel[-1],vel[-1]/a)
     weight = -G*mEarth*m/((pos[-1] + rEarth)**2) # rocket weight in [N]
-    F      = thrust + weight - drag # net force in [N]
+
+    # calculate acceleration using Newton's second law
+    F = thrust + weight - drag # net force in [N]
     
     # update velocity and acceleration data vectors
-    time      = np.append([time], time[-1] + dt)
-    dragArray = np.append([dragArray], drag)
-    machArray = np.append([machArray], vel[-1]/a)
-
+    time      = np.append([time],time[-1]+dt)
+    dragArray = np.append([dragArray],drag)
+    machArray = np.append([machArray],vel[-1]/a)
+    
     # return results
-    acc  = np.append([acc], F/m)
-    vel  = np.append([vel], vel[-1] + acc[-1]*dt)
-    pos  = np.append([pos], pos[-1] + vel[-1]*dt)
+    acc = np.append([acc],F/m)
+    vel = np.append([vel],vel[-1]+acc[-1]*dt)
+    pos = np.append([pos],pos[-1]+vel[-1]*dt)
 
 # plot results
 plt.figure(figsize=(10, 5))
-plt.subplot(3, 1, 1)
-plt.plot(time, pos, label="Position", color="r")
+plt.subplot(3,1,1)
+plt.plot(time,pos,label="Position",color="r")
 plt.title('Apogee of %.2f m at time %.2f sec' % (np.max(pos),time[np.argmax(pos)]))
 plt.ylabel("Position (m)")
 plt.legend()
 plt.grid()
 
-plt.subplot(3, 1, 2)
-plt.plot(time, machArray, label="Relative Mach", color="g")
+plt.subplot(3,1,2)
+plt.plot(time,machArray,label="Relative Mach",color="g")
 plt.ylabel("Mach")
 plt.legend()
 plt.grid()
 
-plt.subplot(3, 1, 3)
-plt.plot(time,dragArray, label="Drag")
-plt.xlabel("Time (sec)")
+plt.subplot(3,1,3)
+plt.plot(time,dragArray,label="Drag")
+plt.xlabel("Time (s)")
 plt.ylabel("Drag (N)")
 plt.legend()
 plt.grid()
