@@ -6,11 +6,14 @@ import scipy
 import scipy.interpolate
 
 # environmental constants
-g0    = 9.80665   # acceleration due to gravity [m/s^2]
-gamma = 1.4       # adiabatic ratio
-R     = 287.05287 # gas constant [N-m/kg-K]
-Bs    = 1.458e-6  # [N-s/m2 K1/2]
-S     = 110.4     # Sutherland constant [K]
+g0     = 9.80665     # acceleration due to gravity [m/s^2]
+gamma  = 1.4         # adiabatic ratio
+R      = 287.05287   # gas constant [N-m/kg-K]
+Bs     = 1.458e-6    # [N-s/m2 K1/2]
+S      = 110.4       # Sutherland constant [K]
+G      = 6.67430e-11 # Newtonian constant of gravitation [m^3/kg/s^2]
+mEarth = 5.972e24    # mass of the Earth [kg]
+rEarth = 6378137     # radius of the Earth [m]
 
 # rocket engine performance parameters 
 timeBurnout  = 1.8   # time to engine burnout [sec]
@@ -42,7 +45,7 @@ time = [0]    # initial time [sec]
 dt   = .01    # time step [sec]
 
 # function to determine mass relative to engine burnout time
-def getMass(time,timeBurnout,massInert,massProp):
+def getMass(time,massInert,massProp):
     if time < timeBurnout: # engine enabled
         mass = massInert + massProp*(1-(time/timeBurnout)) # [kg]
     else: # engine disabled
@@ -50,7 +53,7 @@ def getMass(time,timeBurnout,massInert,massProp):
     return mass
 
 # function to determine thrust relative to engine burnout time
-def getThrust(time,timeBurnout,engineThrust):
+def getThrust(time,engineThrust):
     if time < timeBurnout: # engine enabled
         thrust = engineThrust # [N]
     else: # engine disabled
@@ -58,7 +61,7 @@ def getThrust(time,timeBurnout,engineThrust):
     return thrust
 
 # function to calculate aerodynamic drag
-def getDrag(time,timeBurnout,fBoost,fCoast,s,rho,velocity,mach):
+def getDrag(time,fBoost,fCoast,s,rho,velocity,mach):
     # select which drag coefficient function to use
     if time < timeBurnout: # engine enabled
         cD_function = fBoost
@@ -174,13 +177,13 @@ dragArray = [0]
 machArray = [0]
 while pos[-1] < 20000 and pos[-1] > -.1:
     # calculate current system parameters
-    m               = getMass(time[-1],timeBurnout,massInert,massProp)
+    m               = getMass(time[-1],massInert,massProp)
     T, P, rho, a, u = atmosphericConditions(pos[-1])
    
     # calculate acceleration using Newton's second law
-    thrust = getThrust(time[-1],timeBurnout,engineThrust)
-    drag   = getDrag(time[-1],timeBurnout,fBoost,fCoast,A,rho,vel[-1],vel[-1]/a)
-    weight = -g0*m                  # rocket weight in [N]
+    thrust = getThrust(time[-1],engineThrust)
+    drag   = getDrag(time[-1],fBoost,fCoast,A,rho,vel[-1],vel[-1]/a)
+    weight = -G*mEarth*m/((pos[-1] + rEarth)**2) # rocket weight in [N]
     F      = thrust + weight - drag # net force in [N]
     
     # update velocity and acceleration data vectors
@@ -188,6 +191,7 @@ while pos[-1] < 20000 and pos[-1] > -.1:
     dragArray = np.append([dragArray], drag)
     machArray = np.append([machArray], vel[-1]/a)
 
+    # return results
     acc  = np.append([acc], F/m)
     vel  = np.append([vel], vel[-1] + acc[-1]*dt)
     pos  = np.append([pos], pos[-1] + vel[-1]*dt)
@@ -195,7 +199,7 @@ while pos[-1] < 20000 and pos[-1] > -.1:
 # plot results
 plt.figure(figsize=(10, 5))
 plt.subplot(3, 1, 1)
-plt.plot(time, pos, label="Position (m)", color="r")
+plt.plot(time, pos, label="Position", color="r")
 plt.title('Apogee of %.2f m at time %.2f sec' % (np.max(pos),time[np.argmax(pos)]))
 plt.ylabel("Position (m)")
 plt.legend()
@@ -208,7 +212,7 @@ plt.legend()
 plt.grid()
 
 plt.subplot(3, 1, 3)
-plt.plot(time,dragArray, label="Drag (N)")
+plt.plot(time,dragArray, label="Drag")
 plt.xlabel("Time (sec)")
 plt.ylabel("Drag (N)")
 plt.legend()
