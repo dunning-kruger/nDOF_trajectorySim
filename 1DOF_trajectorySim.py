@@ -1,11 +1,10 @@
 # 1 Degree of Freedom (1-DOF) Trajectory Simulation
 # TODO: add option to import and use thrust/mass motor profiles
-# TODO: replace kinemtic equations with numerical integration
 
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy
 import scipy.interpolate
+import scipy.integrate
 
 # environmental constants
 g0     = 9.80665     # acceleration due to gravity [m/s^2]
@@ -40,11 +39,10 @@ dia = .122             # rocket diameter [m]
 A   = np.pi*(dia/2)**2 # rocket frontal area [m^2]
 
 # simulation initialization
-pos  = [210]  # initail position [m]
-vel  = [.001] # initial velocity [m/s]
-acc  = [0]    # initial acceleration [m/s^2]
-time = [0]    # initial time [sec]
-dt   = .01    # time step [sec]
+pos   = 210  # initail position [m]
+vel   = .001 # initial velocity [m/s]
+t_max = 110  # simulation duration [sec]
+dt    = .01  # time step [sec]
 
 # function to determine mass relative to engine burnout time
 def getMass(time,massInert,massProp):
@@ -168,56 +166,57 @@ def atmosphericConditions(altitude):
         P = 0
 
     # calculate outputs
-    rho = P / (T * R)                       # air density [kg/m^3]
-    a   = (gamma * R * T) ** 0.5            # acoustic sound [m/s]
-    u   = (Bs * (T**1.5) / (T + S)) / rho   # kinematic viscosity [m^2/s]
+    rho = P / (T * R)                     # air density [kg/m^3]
+    a   = (gamma * R * T) ** 0.5          # acoustic sound [m/s]
+    u   = (Bs * (T**1.5) / (T + S)) / rho # kinematic viscosity [m^2/s]
     return T, P, rho, a, u
 
-# simulation loop
-dragArray = [0]
-machArray = [0]
-while pos[-1] < 20000 and pos[-1] > -.1:
+# system of ODEs: [velocity, acceleration]
+def simulation(t, y):
+    # parse input arguments
+    alt, vel = y  # y[0] is altitude, y[1] is velocity
+    
     # calculate current system parameters
-    m               = getMass(time[-1],massInert,massProp)
-    T, P, rho, a, u = atmosphericConditions(pos[-1])
+    m               = getMass(t,massInert,massProp)
+    T, P, rho, a, u = atmosphericConditions(alt)
     
     # get rocket body forces
-    thrust = getThrust(time[-1],engineThrust)
-    drag   = getDrag(time[-1],fBoost,fCoast,A,rho,vel[-1],vel[-1]/a)
-    weight = -G*mEarth*m/((pos[-1] + rEarth)**2) # rocket weight in [N]
+    thrust = getThrust(t,engineThrust)
+    drag   = getDrag(t,fBoost,fCoast,A,rho,vel,vel/a)
+    weight = -G*mEarth*m/((alt + rEarth)**2) # rocket weight in [N]
+
+    # sum body forces
+    F = thrust + weight - drag # net force in [N]
 
     # calculate acceleration using Newton's second law
-    F = thrust + weight - drag # net force in [N]
-    
-    # update velocity and acceleration data vectors
-    time      = np.append([time],time[-1]+dt)
-    dragArray = np.append([dragArray],drag)
-    machArray = np.append([machArray],vel[-1]/a)
-    
-    # return results
-    acc = np.append([acc],F/m)
-    vel = np.append([vel],vel[-1]+acc[-1]*dt)
-    pos = np.append([pos],pos[-1]+vel[-1]*dt)
+    acc = F/m  # [m/s^2]
+
+    return [vel, acc]  # dx/dt = vel, dv/dt = acc
+
+# solve ODE
+time = np.linspace(0, t_max, round(t_max/dt)) # time vector for evaluation [sec]
+sol  = scipy.integrate.solve_ivp(simulation, [0, t_max], [pos, vel], method='RK45', t_eval=time)
+
+# extract results
+time = sol.t    # time [sec]
+pos  = sol.y[0] # position [m]
+vel  = sol.y[1] # velocity [m/s]
 
 # plot results
 plt.figure(figsize=(10, 5))
-plt.subplot(3,1,1)
-plt.plot(time,pos,label="Position",color="r")
+plt.subplot(2,1,1)
+plt.plot(time,pos,label="Altitude",color="r")
+plt.axvline(x=timeBurnout, color='gray', linestyle='--', label="Engine Burnout")
 plt.title('Apogee of %.2f m at time %.2f sec' % (np.max(pos),time[np.argmax(pos)]))
-plt.ylabel("Position (m)")
+plt.ylabel("Displacement (m)")
 plt.legend()
 plt.grid()
 
-plt.subplot(3,1,2)
-plt.plot(time,machArray,label="Relative Mach",color="g")
-plt.ylabel("Mach")
-plt.legend()
-plt.grid()
-
-plt.subplot(3,1,3)
-plt.plot(time,dragArray,label="Drag")
-plt.xlabel("Time (s)")
-plt.ylabel("Drag (N)")
+plt.subplot(2,1,2)
+plt.plot(time,vel,label="Vertical Speed",color="g")
+plt.axvline(x=timeBurnout, color='gray', linestyle='--', label="Engine Burnout")
+plt.ylabel("Velocity (m/s)")
+plt.xlabel("Time (sec)")
 plt.legend()
 plt.grid()
 
