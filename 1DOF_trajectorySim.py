@@ -1,50 +1,16 @@
 # 1 Degree of Freedom (1-DOF) Trajectory Simulation
 #   Only the z-axis (altitude) is solved
 # TODO: add option to import and use thrust/mass motor profiles
-# TODO: rerfine initial conditions
+# TODO: refine engine throttle
+# TODO: refine initial conditions
+# TODO: add spherical harmonics
+# TODO: add relativistic effects
+# TODO: add multi-body physics (sun, moon, earth, vehicle, etc.)
 
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate
 import scipy.integrate
-
-# environmental constants
-g0     = 9.80665     # acceleration due to gravity [m/s^2]
-gamma  = 1.4         # adiabatic ratio
-R      = 287.05287   # gas constant [N⋅m/kg⋅K]
-Bs     = 1.458e-6    # dynamic viscocity [N⋅s/m^2]
-S      = 110.4       # Sutherland constant [K]
-G      = 6.67430e-11 # Newtonian constant of gravitation [m^3/kg⋅s^2]
-mEarth = 5.972e24    # mass of the Earth [kg]
-rEarth = 6378137     # radius of the Earth [m]
-
-# rocket engine performance parameters 
-timeBurnout  = 1.8   # time to engine burnout [sec]
-engineThrust = 21525 # total engine thrust [N]
-
-# rocket mass parameters
-massInitial = 65.6                    # rocket inert mass [kg]
-massInert   = 45.2                    # engine propellant mass [kg]
-massProp    = massInitial - massInert # engine propellant mass [kg]
-
-# drag coefficient experimental measurement data
-CDmach_lookup  = [0,     0.5,   0.75,  0.9,   0.95,  1.1,   1.2,   1.3 ,  1.5,   2.0,   3.0]
-CDCoast_lookup = [0.292, 0.264, 0.277, 0.392, 0.474, 0.557, 0.557, 0.545, 0.492, 0.428, 0.335]
-CDBoost_lookup = [0.148, 0.127, 0.129, 0.167, 0.197, 0.245, 0.245, 0.241, 0.227, 0.207, 0.174]
-
-# create drag coefficient functions
-fCoast = scipy.interpolate.CubicSpline(CDmach_lookup,CDCoast_lookup)
-fBoost = scipy.interpolate.CubicSpline(CDmach_lookup,CDBoost_lookup)
-
-# vehicle structure parameters
-dia = .122             # rocket diameter [m]  
-A   = np.pi*(dia/2)**2 # rocket frontal area [m^2]
-
-# simulation initialization
-pos   = np.array([210])  # initial position [m]
-vel   = np.array([.001]) # initial velocity [m/s]
-t_max = 110              # simulation duration [sec]
-dt    = .01              # time step [sec]
 
 # function to determine mass relative to engine burnout time
 def getMass(time,massInert,massProp):
@@ -189,15 +155,55 @@ def simulation(time, state):
     thrustThrottle = np.array([0, 0, 1])  
     thrust = thrustThrottle*getThrust(time,engineThrust)
     drag   = getDrag(time,fBoost,fCoast,A,rho,vel,a)
-    weight = -G*mEarth*m/((z + rEarth)**2) # rocket weight in [N]
+
+    # get force of gravity
+    gravity = -G*mEarth*m/((z + rEarth)**2) # rocket weight in [N]
 
     # sum body forces
-    Fz = thrust[2] + weight - drag[2] # net force in [N]
+    Fz = thrust[2] + gravity - drag[2] # net force in [N]
 
     # calculate acceleration using Newton's second law
     az = Fz/m # [m/s^2]
     
     return [vz, az]
+
+# environmental constants
+g0     = 9.80665     # acceleration due to gravity [m/s^2]
+gamma  = 1.4         # adiabatic ratio
+R      = 287.05287   # gas constant [N⋅m/kg⋅K]
+Bs     = 1.458e-6    # dynamic viscocity [N⋅s/m^2]
+S      = 110.4       # Sutherland constant [K]
+G      = 6.67430e-11 # Newtonian constant of gravitation [m^3/kg⋅s^2]
+mEarth = 5.972e24    # mass of the Earth [kg]
+rEarth = 6378137     # radius of the Earth [m]
+
+# rocket engine performance parameters 
+timeBurnout  = 1.8   # time to engine burnout [sec]
+engineThrust = 21525 # total engine thrust [N]
+
+# rocket mass parameters
+massInitial = 65.6                    # rocket inert mass [kg]
+massInert   = 45.2                    # engine propellant mass [kg]
+massProp    = massInitial - massInert # engine propellant mass [kg]
+
+# drag coefficient experimental measurement data
+CDmach_lookup  = [0,     0.5,   0.75,  0.9,   0.95,  1.1,   1.2,   1.3 ,  1.5,   2.0,   3.0]
+CDCoast_lookup = [0.292, 0.264, 0.277, 0.392, 0.474, 0.557, 0.557, 0.545, 0.492, 0.428, 0.335]
+CDBoost_lookup = [0.148, 0.127, 0.129, 0.167, 0.197, 0.245, 0.245, 0.241, 0.227, 0.207, 0.174]
+
+# create drag coefficient functions
+fCoast = scipy.interpolate.CubicSpline(CDmach_lookup,CDCoast_lookup)
+fBoost = scipy.interpolate.CubicSpline(CDmach_lookup,CDBoost_lookup)
+
+# vehicle structure parameters
+dia = .122             # rocket diameter [m]  
+A   = np.pi*(dia/2)**2 # rocket frontal area [m^2]
+
+# simulation initialization
+pos   = np.array([14.6304]) # initial position [m]
+vel   = np.array([.001])    # initial velocity [m/s]
+t_max = 110                 # simulation duration [sec]
+dt    = .01                 # time step [sec]
 
 # numerical integration
 time = np.linspace(0, t_max, round(t_max/dt)) # time vector for evaluation
