@@ -142,7 +142,7 @@ def atmosphericConditions(altitude):
     return T, P, rho, a, u
 
 # system of ODEs
-def simulation(time, state):
+def simulation(time,state):
     # parse input arguments
     z, vz = state
     vel = np.array([0, 0, vz])
@@ -174,8 +174,13 @@ R      = 287.05287   # gas constant [N⋅m/kg⋅K]
 Bs     = 1.458e-6    # dynamic viscocity [N⋅s/m^2]
 S      = 110.4       # Sutherland constant [K]
 G      = 6.67430e-11 # Newtonian constant of gravitation [m^3/kg⋅s^2]
-mEarth = 5.972e24    # mass of the Earth [kg]
-rEarth = 6378137     # radius of the Earth [m]
+
+# ellipsoid parameters from World Geodetic System 84 (WGS84)
+mEarth = 5.972e24        # mass of the Earth [kg]
+rEarth = 6378137         # radius of the Earth [m]
+a      = 6378137         # semi-major axis (equatorial radius) [m]
+b      = 6356752.314245  # semi-minor axis (polar radius) [m]
+e      = 0.0818191908426 # Earth radial eccentricity
 
 # rocket engine performance parameters 
 timeBurnout  = 1.8   # time to engine burnout [sec]
@@ -191,7 +196,7 @@ CDmach_lookup  = [0,     0.5,   0.75,  0.9,   0.95,  1.1,   1.2,   1.3 ,  1.5,  
 CDCoast_lookup = [0.292, 0.264, 0.277, 0.392, 0.474, 0.557, 0.557, 0.545, 0.492, 0.428, 0.335]
 CDBoost_lookup = [0.148, 0.127, 0.129, 0.167, 0.197, 0.245, 0.245, 0.241, 0.227, 0.207, 0.174]
 
-# create drag coefficient functions
+# drag coefficient functions
 fCoast = scipy.interpolate.CubicSpline(CDmach_lookup,CDCoast_lookup)
 fBoost = scipy.interpolate.CubicSpline(CDmach_lookup,CDBoost_lookup)
 
@@ -199,11 +204,14 @@ fBoost = scipy.interpolate.CubicSpline(CDmach_lookup,CDBoost_lookup)
 dia = .122             # rocket diameter [m]  
 A   = np.pi*(dia/2)**2 # rocket frontal area [m^2]
 
+# location of launch pad 39A at the Kennedy Space Center
+lat, lon, alt = 28.608333, -80.604444, 14.6304
+
 # simulation initialization
-pos   = np.array([14.6304]) # initial position [m]
-vel   = np.array([.001])    # initial velocity [m/s]
-t_max = 110                 # simulation duration [sec]
-dt    = .01                 # time step [sec]
+pos   = np.array([alt])  # initial position [m]
+vel   = np.array([.001]) # initial velocity [m/s]
+t_max = 110              # simulation duration [sec]
+dt    = .01              # time step [sec]
 
 # numerical integration
 time = np.linspace(0, t_max, round(t_max/dt)) # time vector for evaluation
